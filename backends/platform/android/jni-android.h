@@ -140,6 +140,7 @@ private:
 	static jobject _jobj_egl_surface;
 	// cached EGL version
 	static int _egl_version;
+	static bool _headless_mode;
 
 	static Common::Archive *_asset_archive;
 	static OSystem_Android *_system;
@@ -220,15 +221,21 @@ inline bool JNI::haveSurface() {
 }
 
 inline bool JNI::swapBuffers() {
+	if (!_jobj_egl || !_jobj_egl_display || !_jobj_egl_surface || !_MID_EGL10_eglSwapBuffers) {
+		return false;
+	}
 	JNIEnv *env = JNI::getEnv();
 
 	return env->CallBooleanMethod(_jobj_egl, _MID_EGL10_eglSwapBuffers,
-									_jobj_egl_display, _jobj_egl_surface);
+							_jobj_egl_display, _jobj_egl_surface);
 }
 
 inline int JNI::writeAudio(JNIEnv *env, jbyteArray &data, int offset, int size) {
+	if (!_jobj_audio_track || !_MID_AudioTrack_write) {
+		return 0;
+	}
 	return env->CallIntMethod(_jobj_audio_track, _MID_AudioTrack_write, data,
-								offset, size);
+							offset, size);
 }
 
 #endif

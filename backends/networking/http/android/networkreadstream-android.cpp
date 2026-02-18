@@ -132,9 +132,11 @@ static jobjectArray getHeaders(JNIEnv *env, RequestHeaders *headersList) {
 		return nullptr;
 	}
 
-	jclass stringClass = env->FindClass("java/lang/String");
+	jclass stringClass = NetJNI::getStringClass();
+	if (!stringClass) {
+		return nullptr;
+	}
 	jobjectArray array = env->NewObjectArray(headersList->size() * 2, stringClass, nullptr);
-	env->DeleteLocalRef(stringClass);
 
 	int i = 0;
 	for (const Common::String &header : *headersList) {
@@ -170,9 +172,11 @@ static jobjectArray getHeaders(JNIEnv *env, RequestHeaders *headersList) {
 }
 
 static jobjectArray getFormFields(JNIEnv *env, const Common::HashMap<Common::String, Common::String> &map) {
-	jclass stringClass = env->FindClass("java/lang/String");
+	jclass stringClass = NetJNI::getStringClass();
+	if (!stringClass) {
+		return nullptr;
+	}
 	jobjectArray array = env->NewObjectArray(map.size() * 2, stringClass, nullptr);
-	env->DeleteLocalRef(stringClass);
 
 	int i = 0;
 	for (const Common::HashMap<Common::String, Common::String>::Node &entry : map) {
@@ -191,9 +195,11 @@ static jobjectArray getFormFields(JNIEnv *env, const Common::HashMap<Common::Str
 }
 
 static jobjectArray getFormFiles(JNIEnv *env, const Common::HashMap<Common::String, Common::Path> &map) {
-	jclass stringClass = env->FindClass("java/lang/String");
+	jclass stringClass = NetJNI::getStringClass();
+	if (!stringClass) {
+		return nullptr;
+	}
 	jobjectArray array = env->NewObjectArray(map.size() * 2, stringClass, nullptr);
-	env->DeleteLocalRef(stringClass);
 
 	int i = 0;
 	for (const Common::HashMap<Common::String, Common::Path>::Node &entry : map) {
