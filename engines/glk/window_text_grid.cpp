@@ -20,6 +20,7 @@
  */
 
 #include "glk/window_text_grid.h"
+#include "glk/openfrotz_runtime_hooks.h"
 #include "glk/conf.h"
 #include "glk/glk.h"
 #include "glk/selection.h"
@@ -630,6 +631,24 @@ void TextGridWindow::redraw() {
 	gli_tts_flush();
 
 	Window::redraw();
+
+	if ((_lineRequest || _lineRequestUni) && OpenFrotzRuntimeHooks::hasQueuedCommand()) {
+		OpenFrotzRuntimeHooks::noteInputEvent("gridDequeueFromRedraw", keycode_Return, _lineRequest ? 1 : 0, _lineRequestUni ? 1 : 0);
+		Common::String injected;
+		if (OpenFrotzRuntimeHooks::dequeueCommand(injected) && !injected.empty()) {
+			TextGridRow *line = &_lines[_inOrgY];
+			for (uint ix = 0; ix < injected.size() && _inLen < _inMax; ix++) {
+				line->_attrs[_inOrgX + _inLen].set(style_Input);
+				line->_chars[_inOrgX + _inLen] = static_cast<unsigned char>(injected[ix]);
+				_inLen++;
+				_inCurs = _inLen;
+			}
+			_curX = _inOrgX + _inCurs;
+			_curY = _inOrgY;
+			touch(_inOrgY);
+			acceptLine(keycode_Return);
+		}
+	}
 
 	x0 = _bbox.left;
 	y0 = _bbox.top;

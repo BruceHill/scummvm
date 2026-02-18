@@ -25,6 +25,7 @@
 #include "glk/conf.h"
 #include "common/file.h"
 #include "graphics/fonts/ttf.h"
+#include "graphics/fontman.h"
 #include "image/xbm.h"
 
 #include "glk/zcode/infocom6x8.xbm"
@@ -121,7 +122,14 @@ void FrotzScreen::loadExtraFonts(Common::Archive *archive) {
 	if (!f->open("NotoSansRunic-Regular.ttf", *archive))
 		error("Could not load font");
 
+	#if defined(USE_FREETYPE2)
 	_fonts.push_back(Graphics::loadTTFFont(f, DisposeAfterUse::YES, g_conf->_propInfo._size, Graphics::kTTFSizeModeCharacter));
+#else
+	delete f;
+	warning("OpenFrotzGLK: FreeType2 disabled; using console font fallback for runic");
+	_ownsFonts = false;
+	_fonts.push_back(FontMan.getFontByUsage(Graphics::FontManager::kConsoleFont));
+#endif
 }
 
 } // End of namespace ZCode

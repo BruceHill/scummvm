@@ -25,6 +25,13 @@
 #include "common/system.h"
 #include "common/str.h"
 
+#if defined(__ANDROID__)
+extern "C" int __android_log_write(int prio, const char *tag, const char *text);
+#ifndef ANDROID_LOG_ERROR
+#define ANDROID_LOG_ERROR 6
+#endif
+#endif
+
 namespace Common {
 
 static OutputFormatter s_errorOutputFormatter = nullptr;
@@ -125,6 +132,9 @@ void NORETURN_PRE error(const char *s, ...) {
 	// FIXME
 	for (;;) {}
 #else
+#if defined(__ANDROID__)
+	__android_log_write(ANDROID_LOG_ERROR, "OpenFrotzFatal", buf_output);
+#endif
 	exit(1);
 #endif
 }

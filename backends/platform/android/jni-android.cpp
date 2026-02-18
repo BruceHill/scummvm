@@ -67,6 +67,7 @@ jobject JNI::_jobj_egl = 0;
 jobject JNI::_jobj_egl_display = 0;
 jobject JNI::_jobj_egl_surface = 0;
 int JNI::_egl_version = 0;
+bool JNI::_headless_mode = false;
 
 Common::Archive *JNI::_asset_archive = 0;
 OSystem_Android *JNI::_system = 0;
@@ -631,6 +632,9 @@ void JNI::addSysArchivesToSearchSet(Common::SearchSet &s, int priority) {
 }
 
 bool JNI::initSurface() {
+	if (_headless_mode) {
+		return false;
+	}
 	JNIEnv *env = JNI::getEnv();
 
 	jobject obj = env->CallObjectMethod(_jobj, _MID_initSurface);
@@ -651,6 +655,9 @@ bool JNI::initSurface() {
 }
 
 void JNI::deinitSurface() {
+	if (_headless_mode) {
+		return;
+	}
 	JNIEnv *env = JNI::getEnv();
 
 	env->DeleteGlobalRef(_jobj_egl_surface);
@@ -667,6 +674,10 @@ void JNI::deinitSurface() {
 }
 
 int JNI::fetchEGLVersion() {
+	if (_headless_mode) {
+		_egl_version = 0;
+		return _egl_version;
+	}
 	JNIEnv *env = JNI::getEnv();
 
 	_egl_version = env->CallIntMethod(_jobj, _MID_eglVersion);
@@ -684,6 +695,9 @@ int JNI::fetchEGLVersion() {
 }
 
 void JNI::setAudioPause() {
+	if (!_jobj_audio_track || !_MID_AudioTrack_flush || !_MID_AudioTrack_pause) {
+		return;
+	}
 	JNIEnv *env = JNI::getEnv();
 
 	env->CallVoidMethod(_jobj_audio_track, _MID_AudioTrack_flush);
@@ -706,6 +720,9 @@ void JNI::setAudioPause() {
 }
 
 void JNI::setAudioPlay() {
+	if (!_jobj_audio_track || !_MID_AudioTrack_play) {
+		return;
+	}
 	JNIEnv *env = JNI::getEnv();
 
 	env->CallVoidMethod(_jobj_audio_track, _MID_AudioTrack_play);
@@ -719,6 +736,9 @@ void JNI::setAudioPlay() {
 }
 
 void JNI::setAudioStop() {
+	if (!_jobj_audio_track || !_MID_AudioTrack_stop) {
+		return;
+	}
 	JNIEnv *env = JNI::getEnv();
 
 	env->CallVoidMethod(_jobj_audio_track, _MID_AudioTrack_stop);
@@ -788,31 +808,42 @@ void JNI::create(JNIEnv *env, jobject self, jobject asset_manager,
 	FIND_METHOD(, exportBackup, "(Ljava/lang/String;)I");
 	FIND_METHOD(, importBackup, "(Ljava/lang/String;Ljava/lang/String;)I");
 
-	_jobj_egl = env->NewGlobalRef(egl);
-	_jobj_egl_display = env->NewGlobalRef(egl_display);
+	_jobj_egl = egl ? env->NewGlobalRef(egl) : nullptr;
+	_jobj_egl_display = egl_display ? env->NewGlobalRef(egl_display) : nullptr;
 	_egl_version = 0;
+	_headless_mode = (_jobj_egl == nullptr || _jobj_egl_display == nullptr);
+	_MID_EGL10_eglSwapBuffers = 0;
 
 	env->DeleteLocalRef(cls);
 
-	cls = env->GetObjectClass(_jobj_egl);
+	if (_jobj_egl) {
+		cls = env->GetObjectClass(_jobj_egl);
 
-	FIND_METHOD(EGL10_, eglSwapBuffers,
-				"(Ljavax/microedition/khronos/egl/EGLDisplay;"
-				"Ljavax/microedition/khronos/egl/EGLSurface;)Z");
+		FIND_METHOD(EGL10_, eglSwapBuffers,
+					"(Ljavax/microedition/khronos/egl/EGLDisplay;"
+					"Ljavax/microedition/khronos/egl/EGLSurface;)Z");
 
-	_jobj_audio_track = env->NewGlobalRef(at);
+		env->DeleteLocalRef(cls);
+	}
 
-	env->DeleteLocalRef(cls);
+	_jobj_audio_track = at ? env->NewGlobalRef(at) : nullptr;
+	_MID_AudioTrack_flush = 0;
+	_MID_AudioTrack_pause = 0;
+	_MID_AudioTrack_play = 0;
+	_MID_AudioTrack_stop = 0;
+	_MID_AudioTrack_write = 0;
 
-	cls = env->GetObjectClass(_jobj_audio_track);
+	if (_jobj_audio_track) {
+		cls = env->GetObjectClass(_jobj_audio_track);
 
-	FIND_METHOD(AudioTrack_, flush, "()V");
-	FIND_METHOD(AudioTrack_, pause, "()V");
-	FIND_METHOD(AudioTrack_, play, "()V");
-	FIND_METHOD(AudioTrack_, stop, "()V");
-	FIND_METHOD(AudioTrack_, write, "([BII)I");
+		FIND_METHOD(AudioTrack_, flush, "()V");
+		FIND_METHOD(AudioTrack_, pause, "()V");
+		FIND_METHOD(AudioTrack_, play, "()V");
+		FIND_METHOD(AudioTrack_, stop, "()V");
+		FIND_METHOD(AudioTrack_, write, "([BII)I");
 
-	env->DeleteLocalRef(cls);
+		env->DeleteLocalRef(cls);
+	}
 #undef FIND_METHOD
 
 	assets_updated = assets_updated_;
@@ -820,7 +851,8 @@ void JNI::create(JNIEnv *env, jobject self, jobject asset_manager,
 	// Initialize network bindings here in a Java thread
 	// If net called gets called for the first time in a timer thread,
 	// the class loader is lost and can't find our classes.
-	Networking::NetJNI::init(env);
+	// OpenFrotz embedded mode: defer NetJNI init to avoid JNI class ref issues during early startup.
+	//Networking::NetJNI::init(env);
 
 	pause = false;
 	// initial value of zero!
@@ -854,10 +886,15 @@ void JNI::destroy(JNIEnv *env, jobject self) {
 	// see above
 	//JNI::getEnv()->DeleteWeakGlobalRef(_jobj);
 
-	JNI::getEnv()->DeleteGlobalRef(_jobj_egl_display);
-	JNI::getEnv()->DeleteGlobalRef(_jobj_egl);
-	JNI::getEnv()->DeleteGlobalRef(_jobj_audio_track);
-	JNI::getEnv()->DeleteGlobalRef(_jobj);
+	if (_jobj_egl_display) JNI::getEnv()->DeleteGlobalRef(_jobj_egl_display);
+	if (_jobj_egl) JNI::getEnv()->DeleteGlobalRef(_jobj_egl);
+	if (_jobj_audio_track) JNI::getEnv()->DeleteGlobalRef(_jobj_audio_track);
+	if (_jobj) JNI::getEnv()->DeleteGlobalRef(_jobj);
+	_jobj_egl_display = nullptr;
+	_jobj_egl = nullptr;
+	_jobj_audio_track = nullptr;
+	_jobj = nullptr;
+	_headless_mode = false;
 }
 
 void JNI::setSurface(JNIEnv *env, jobject self, jint width, jint height, jint bpp) {
@@ -903,6 +940,7 @@ jint JNI::main(JNIEnv *env, jobject self, jobjectArray args) {
 		env->DeleteLocalRef(arg);
 	}
 
+
 	LOGI("Entering scummvm_main with %d args", argc);
 
 	res = scummvm_main(argc, argv);
@@ -918,7 +956,7 @@ cleanup:
 		if (argv[i] == 0)
 			continue;
 
-		jstring arg = (jstring)env->GetObjectArrayElement(args, nargs);
+		jstring arg = (jstring)env->GetObjectArrayElement(args, i);
 
 		// Exception already thrown?
 		if (arg == 0)

@@ -299,14 +299,34 @@ void splashScreen() {
 
 	g_system->showOverlay();
 	float scaleFactor = g_system->getHiDPIScreenFactor();
-	int16 overlayWidth = g_system->getOverlayWidth();
-	int16 overlayHeight = g_system->getOverlayHeight();
-	int16 scaledW = (int16)(overlayWidth / scaleFactor);
-	int16 scaledH = (int16)(overlayHeight / scaleFactor);
+	if (scaleFactor <= 0.0f) {
+		warning("OpenFrotzSplash: invalid HiDPI factor %f; defaulting to 1.0", scaleFactor);
+		scaleFactor = 1.0f;
+	}
+
+	int overlayWidth = g_system->getOverlayWidth();
+	int overlayHeight = g_system->getOverlayHeight();
+	if (overlayWidth <= 0 || overlayHeight <= 0) {
+		warning("OpenFrotzSplash: invalid overlay size %dx%d; skipping splash", overlayWidth, overlayHeight);
+		g_system->hideOverlay();
+		return;
+	}
+
+	int scaledW = (int)(overlayWidth / scaleFactor);
+	int scaledH = (int)(overlayHeight / scaleFactor);
+	if (scaledW <= 0 || scaledH <= 0) {
+		scaledW = overlayWidth;
+		scaledH = overlayHeight;
+	}
+	if (scaledW <= 0 || scaledH <= 0) {
+		warning("OpenFrotzSplash: invalid scaled size %dx%d (overlay=%dx%d factor=%f); skipping splash", scaledW, scaledH, overlayWidth, overlayHeight, scaleFactor);
+		g_system->hideOverlay();
+		return;
+	}
 
 	// Fill with orange
 	Graphics::Surface screen;
-	screen.create(scaledW, scaledH, g_system->getOverlayFormat());
+	screen.create((int16)scaledW, (int16)scaledH, g_system->getOverlayFormat());
 	screen.fillRect(Common::Rect(screen.w, screen.h), screen.format.ARGBToColor(0xff, 0xcc, 0x66, 0x00));
 
 	// Print version information

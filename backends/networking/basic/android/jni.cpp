@@ -55,6 +55,7 @@ jmethodID NetJNI::_MID_url_getPort = 0;
 jmethodID NetJNI::_MID_url_getDefaultPort = 0;
 
 jclass NetJNI::_CLS_Socket = nullptr;
+jclass NetJNI::_CLS_String = nullptr;
 
 jmethodID NetJNI::_MID_socket_init = 0;
 jmethodID NetJNI::_MID_socket_ready = 0;
@@ -137,6 +138,10 @@ void NetJNI::init(JNIEnv *env) {
 	FIND_METHOD(socket_, recv, "([B)I");
 	FIND_METHOD(socket_, close, "()V");
 
+	env->DeleteLocalRef(cls);
+
+	cls = env->FindClass("java/lang/String");
+	_CLS_String = (jclass)env->NewGlobalRef(cls);
 	env->DeleteLocalRef(cls);
 
 #ifdef USE_HTTP

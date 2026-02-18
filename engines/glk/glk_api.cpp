@@ -20,6 +20,7 @@
  */
 
 #include "glk/glk_api.h"
+#include "glk/openfrotz_runtime_hooks.h"
 #include "glk/conf.h"
 #include "glk/events.h"
 #include "glk/picture.h"
@@ -377,14 +378,19 @@ strid_t GlkAPI::glk_stream_get_current(void) {
 
 void GlkAPI::glk_put_char(unsigned char ch) {
 	Stream *str = _streams->getCurrent();
-	if (str)
+	if (str) {
+		char tmp = static_cast<char>(ch);
+		OpenFrotzRuntimeHooks::appendOutput(&tmp, 1);
 		str->putChar(ch);
-	else
+	} else {
 		warning("glk_put_char: no stream set");
+	}
 }
 
 void GlkAPI::glk_put_char_stream(strid_t str, unsigned char ch) {
 	if (str) {
+		char tmp = static_cast<char>(ch);
+		OpenFrotzRuntimeHooks::appendOutput(&tmp, 1);
 		str->putChar(ch);
 	} else {
 		warning("put_char_stream: invalid ref");
@@ -392,18 +398,22 @@ void GlkAPI::glk_put_char_stream(strid_t str, unsigned char ch) {
 }
 
 void GlkAPI::glk_put_string(const char *s) {
+	OpenFrotzRuntimeHooks::appendOutput(s, strlen(s));
 	_streams->getCurrent()->putBuffer(s, strlen(s));
 }
 
 void GlkAPI::glk_put_string_stream(strid_t str, const char *s) {
+	OpenFrotzRuntimeHooks::appendOutput(s, strlen(s));
 	str->putBuffer(s, strlen(s));
 }
 
 void GlkAPI::glk_put_buffer(const char *buf, uint len) {
+	OpenFrotzRuntimeHooks::appendOutput(buf, len);
 	_streams->getCurrent()->putBuffer(buf, len);
 }
 
 void GlkAPI::glk_put_buffer_stream(strid_t str, const char *buf, uint len) {
+	OpenFrotzRuntimeHooks::appendOutput(buf, len);
 	str->putBuffer(buf, len);
 }
 
@@ -787,21 +797,26 @@ uint GlkAPI::glk_buffer_to_title_case_uni(uint32 *buf, uint len,
 
 void GlkAPI::glk_put_char_uni(uint32 ch) {
 	Stream *str = _streams->getCurrent();
-	if (str)
+	if (str) {
+		OpenFrotzRuntimeHooks::appendOutputUni(&ch, 1);
 		str->putCharUni(ch);
-	else
+	} else {
 		warning("glk_put_char_uni: no stream set");
+	}
 }
 
 void GlkAPI::glk_put_string_uni(const uint32 *s) {
+	OpenFrotzRuntimeHooks::appendOutputUni(s, strlen_uni(s));
 	_streams->getCurrent()->putBufferUni(s, strlen_uni(s));
 }
 
 void GlkAPI::glk_put_buffer_uni(const uint32 *buf, uint len) {
+	OpenFrotzRuntimeHooks::appendOutputUni(buf, len);
 	_streams->getCurrent()->putBufferUni(buf, len);
 }
 
 void GlkAPI::glk_put_char_stream_uni(strid_t str, uint32 ch) {
+	OpenFrotzRuntimeHooks::appendOutputUni(&ch, 1);
 	if (str) {
 		str->putCharUni(ch);
 	} else {
@@ -810,6 +825,7 @@ void GlkAPI::glk_put_char_stream_uni(strid_t str, uint32 ch) {
 }
 
 void GlkAPI::glk_put_string_stream_uni(strid_t str, const uint32 *s) {
+	OpenFrotzRuntimeHooks::appendOutputUni(s, strlen_uni(s));
 	if (str) {
 		str->putBufferUni(s, strlen_uni(s));
 	} else {
@@ -818,6 +834,7 @@ void GlkAPI::glk_put_string_stream_uni(strid_t str, const uint32 *s) {
 }
 
 void GlkAPI::glk_put_buffer_stream_uni(strid_t str, const uint32 *buf, uint len) {
+	OpenFrotzRuntimeHooks::appendOutputUni(buf, len);
 	if (str) {
 		str->putBufferUni(buf, len);
 	} else {

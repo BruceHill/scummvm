@@ -52,6 +52,7 @@ Glulx::Glulx(OSystem *syst, const GlkGameDescription &gameDesc) : GlkAPI(syst, g
 }
 
 void Glulx::runGame() {
+	warning("OpenFrotzGlulx: runGame start fileSize=%u", (unsigned int)_gameFile.size());
 	if (!is_gamefile_valid())
 		return;
 
@@ -77,26 +78,38 @@ void Glulx::runGame() {
 }
 
 bool Glulx::is_gamefile_valid() {
+	warning("OpenFrotzGlulx: validate begin size=%u", (unsigned int)_gameFile.size());
 	if (_gameFile.size() < 8) {
+		warning("OpenFrotzGlulx: validate failed reason=too-short size=%u", (unsigned int)_gameFile.size());
 		GUIErrorMessage(_("This is too short to be a valid Glulx file."));
 		return false;
 	}
 
-	if (_gameFile.readUint32BE() != MKTAG('G', 'l', 'u', 'l')) {
+	const uint32 header = _gameFile.readUint32BE();
+	warning("OpenFrotzGlulx: validate header=0x%08x", (unsigned int)header);
+	if (header != MKTAG('G', 'l', 'u', 'l')) {
+		warning("OpenFrotzGlulx: validate failed reason=bad-header expected=0x%08x got=0x%08x",
+			(unsigned int)MKTAG('G', 'l', 'u', 'l'),
+			(unsigned int)header);
 		GUIErrorMessage(_("This is not a valid Glulx file."));
 		return false;
 	}
 
 	// We support version 2.0 through 3.1.*
 	uint version = _gameFile.readUint32BE();
+	warning("OpenFrotzGlulx: validate version=0x%08x", (unsigned int)version);
 	if (version < 0x20000) {
+		warning("OpenFrotzGlulx: validate failed reason=too-old version=0x%08x", (unsigned int)version);
 		GUIErrorMessage(_("This Glulx file is too old a version to execute."));
 		return false;
 	}
 	if (version >= 0x30200) {
+		warning("OpenFrotzGlulx: validate failed reason=too-new version=0x%08x", (unsigned int)version);
 		GUIErrorMessage(_("This Glulx file is too new a version to execute."));
 		return false;
 	}
+
+	warning("OpenFrotzGlulx: validate ok");
 
 	return true;
 }

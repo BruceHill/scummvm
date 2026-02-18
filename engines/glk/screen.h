@@ -54,6 +54,7 @@ private:
 		double size, double aspect, int style);
 protected:
 	Common::Array<const Graphics::Font *> _fonts;
+	bool _ownsFonts = true;
 protected:
 	/**
 	 * Load the fonts

@@ -20,6 +20,7 @@
  */
 
 #include "glk/window_text_buffer.h"
+#include "glk/openfrotz_runtime_hooks.h"
 #include "glk/conf.h"
 #include "glk/glk.h"
 #include "glk/screen.h"
@@ -661,6 +662,15 @@ void TextBufferWindow::requestLineEvent(char *buf, uint maxlen, uint initlen) {
 
 	// Switch focus to the new window
 	_windows->inputGuessFocus();
+	OpenFrotzRuntimeHooks::noteLineRequest("requestLineEvent", maxlen, initlen);
+
+	Common::String injected;
+	if (OpenFrotzRuntimeHooks::dequeueCommand(injected)) {
+		if (!injected.empty()) {
+			putText(injected.c_str(), injected.size(), _inCurs, 0);
+		}
+		acceptLine(keycode_Return);
+	}
 }
 
 void TextBufferWindow::requestLineEventUni(uint32 *buf, uint maxlen, uint initlen) {
@@ -718,20 +728,42 @@ void TextBufferWindow::requestLineEventUni(uint32 *buf, uint maxlen, uint initle
 
 	// Switch focus to the new window
 	_windows->inputGuessFocus();
+	OpenFrotzRuntimeHooks::noteLineRequest("requestLineEventUni", maxlen, initlen);
+
+	Common::String injected;
+	if (OpenFrotzRuntimeHooks::dequeueCommand(injected)) {
+		for (uint i = 0; i < injected.size(); i++) {
+			uint32 ch = static_cast<unsigned char>(injected[i]);
+			putTextUni(&ch, 1, _inCurs, 0);
+		}
+		acceptLine(keycode_Return);
+	}
 }
 
 void TextBufferWindow::requestCharEvent() {
 	_charRequest = true;
+	OpenFrotzRuntimeHooks::noteInputEvent("requestCharEvent", 0, 0, 0);
 
 	// Switch focus to the new window
 	_windows->inputGuessFocus();
+
+	if (OpenFrotzRuntimeHooks::hasQueuedCommand()) {
+		OpenFrotzRuntimeHooks::noteInputEvent("requestCharEventAutoAdvance", 0, 0, 0);
+		acceptReadChar(keycode_Return);
+	}
 }
 
 void TextBufferWindow::requestCharEventUni() {
 	_charRequestUni = true;
+	OpenFrotzRuntimeHooks::noteInputEvent("requestCharEventUni", 0, 0, 0);
 
 	// Switch focus to the new window
 	_windows->inputGuessFocus();
+
+	if (OpenFrotzRuntimeHooks::hasQueuedCommand()) {
+		OpenFrotzRuntimeHooks::noteInputEvent("requestCharEventUniAutoAdvance", 0, 0, 0);
+		acceptReadChar(keycode_Return);
+	}
 }
 
 void TextBufferWindow::cancelLineEvent(Event *ev) {
@@ -747,6 +779,7 @@ void TextBufferWindow::cancelLineEvent(Event *ev) {
 		ev = &dummyEv;
 
 	ev->clear();
+	OpenFrotzRuntimeHooks::noteInputEvent("cancelLineEvent", _lineRequest ? 1 : 0, _lineRequestUni ? 1 : 0, 0);
 
 	if (!_lineRequest && !_lineRequestUni)
 		return;
@@ -1226,6 +1259,7 @@ int TextBufferWindow::acceptScroll(uint arg) {
 
 void TextBufferWindow::acceptReadChar(uint arg) {
 	uint key;
+	OpenFrotzRuntimeHooks::noteInputEvent("acceptReadChar", arg, _charRequest ? 1 : 0, _charRequestUni ? 1 : 0);
 
 	if (_height < 2)
 		_scrollPos = 0;
@@ -1263,6 +1297,7 @@ void TextBufferWindow::acceptReadChar(uint arg) {
 
 void TextBufferWindow::acceptReadLine(uint32 arg) {
 	uint *cx;
+	OpenFrotzRuntimeHooks::noteInputEvent("acceptReadLine", arg, _lineRequest ? 1 : 0, _lineRequestUni ? 1 : 0);
 	Common::U32String s;
 	int len;
 
@@ -1404,6 +1439,21 @@ void TextBufferWindow::acceptLine(uint32 keycode) {
 		return;
 
 	inbuf = _inBuf;
+	OpenFrotzRuntimeHooks::noteInputEvent("acceptLine", keycode, _lineRequest ? 1 : 0, _lineRequestUni ? 1 : 0);
+	if (keycode == keycode_Return) {
+		Common::String injected;
+		if (OpenFrotzRuntimeHooks::dequeueCommand(injected) && !injected.empty()) {
+			if (_lineRequestUni) {
+				for (uint i = 0; i < injected.size() && _inCurs < _inMax; i++) {
+					uint32 ch = static_cast<unsigned char>(injected[i]);
+					putTextUni(&ch, 1, _inCurs, 0);
+				}
+			} else {
+				putText(injected.c_str(), injected.size(), _inCurs, 0);
+			}
+			OpenFrotzRuntimeHooks::noteInputEvent("acceptLineDequeued", keycode, injected.size(), _lineRequestUni ? 1 : 0);
+		}
+	}
 	inmax = _inMax;
 	inarrayrock = _inArrayRock;
 
@@ -1426,6 +1476,7 @@ void TextBufferWindow::acceptLine(uint32 keycode) {
 	*/
 	if (len) {
 		s = Common::U32String(_chars + _inFence, len);
+		OpenFrotzRuntimeHooks::appendInputEcho(s.encode());
 		_history[_historyPresent].clear();
 
 		o = _history[(_historyPresent == 0 ? HISTORYLEN : _historyPresent) - 1];

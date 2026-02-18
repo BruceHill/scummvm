@@ -35,6 +35,13 @@
 #include "common/textconsole.h"
 #include "common/text-to-speech.h"
 
+#if defined(__ANDROID__)
+extern "C" int __android_log_write(int prio, const char *tag, const char *text);
+#ifndef ANDROID_LOG_ERROR
+#define ANDROID_LOG_ERROR 6
+#endif
+#endif
+
 #include "backends/audiocd/default/default-audiocd.h"
 #include "backends/fs/fs-factory.h"
 #include "backends/timer/default/default-timer.h"
@@ -232,6 +239,9 @@ Common::Rect OSystem::getSafeOverlayArea(int16 *width, int16 *height) const {
 }
 
 void OSystem::fatalError() {
+#if defined(__ANDROID__)
+	__android_log_write(ANDROID_LOG_ERROR, "OpenFrotzFatal", "OSystem::fatalError() -> exit(1)");
+#endif
 	quit();
 	exit(1);
 }

@@ -112,16 +112,23 @@ void GlkEngine::createConfiguration() {
 Common::Error GlkEngine::run() {
 	// Open up the game file
 	Common::Path filename(getFilename());
-	if (!Common::File::exists(filename))
+	warning("OpenFrotzGlkRun: begin gameId=%s interp=%d filename=%s", getGameID().c_str(), (int)getInterpreterType(), filename.toString('/').c_str());
+	if (!Common::File::exists(filename)) {
+		warning("OpenFrotzGlkRun: file missing filename=%s", filename.toString('/').c_str());
 		return Common::kNoGameDataFoundError;
+	}
 
 	if (Blorb::isBlorb(filename)) {
 		// Blorb archive
+		warning("OpenFrotzGlkRun: blorb detected filename=%s", filename.toString('/').c_str());
 		_blorb = new Blorb(filename, getInterpreterType());
 		SearchMan.add("blorb", _blorb, 99, false);
 
-		if (!_gameFile.open("game", *_blorb))
+		if (!_gameFile.open("game", *_blorb)) {
+			warning("OpenFrotzGlkRun: open blorb member failed member=game");
 			return Common::kNoGameDataFoundError;
+		}
+		warning("OpenFrotzGlkRun: open blorb member ok size=%u", (unsigned int)_gameFile.size());
 	} else {
 		// Check for a secondary blorb file with the same filename
 		Common::Array<Common::Path> blorbFilenames;
@@ -136,18 +143,26 @@ Common::Error GlkEngine::run() {
 		}
 
 		// Open up the game file
-		if (!_gameFile.open(filename))
+		if (!_gameFile.open(filename)) {
+			warning("OpenFrotzGlkRun: open plain file failed filename=%s", filename.toString('/').c_str());
 			return Common::kNoGameDataFoundError;
+		}
+		warning("OpenFrotzGlkRun: open plain file ok size=%u", (unsigned int)_gameFile.size());
 	}
 
 	// Perform initialization
+	warning("OpenFrotzGlkRun: initialize begin");
 	initialize();
+	warning("OpenFrotzGlkRun: initialize end");
 
 	// Play the game
 	g_system->setFeatureState(OSystem::kFeatureVirtualKeyboard, true);
+	warning("OpenFrotzGlkRun: subengine runGame begin");
 	runGame();
+	warning("OpenFrotzGlkRun: subengine runGame end");
 	g_system->setFeatureState(OSystem::kFeatureVirtualKeyboard, false);
 
+	warning("OpenFrotzGlkRun: return kNoError");
 	return Common::kNoError;
 }
 

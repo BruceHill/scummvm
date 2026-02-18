@@ -1069,7 +1069,7 @@ bool Sound::prepareMusicStreaming(const Common::Path &filename, int newHandleId,
 	}
 
 	_musicOutputStream[newHandleId] = Audio::makeQueuingAudioStream(sampleRate, isStereo);
-	_mixer->playStream(Audio::Mixer::kPlainSoundType, &_hSampleMusic[newHandleId], _musicOutputStream[newHandleId]);
+	_mixer->playStream(Audio::Mixer::kPlainSoundType, &_hSampleMusic[newHandleId], _musicOutputStream[newHandleId], -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::NO);
 
 	_mixer->setChannelRate(_hSampleMusic[newHandleId], sampleRate);
 	_mixer->setChannelVolume(_hSampleMusic[newHandleId], clampVolume((int32)volume));

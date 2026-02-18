@@ -2,7 +2,9 @@ MODULE := backends/platform/android
 
 MODULE_OBJS := \
 	jni-android.o \
+	openfrotz-runtime.o \
 	asset-archive.o \
+	openfrotz-runtime-hooks.o \
 	android.o \
 	events.o \
 	options.o \

@@ -106,7 +106,10 @@ void TouchControls::init(float scale) {
 	Common::File stream;
 
 	if (!stream.open("gamepad.svg")) {
-		error("Failed to fetch gamepad image");
+		warning("Failed to fetch gamepad image");
+		delete _svg;
+		_svg = nullptr;
+		return;
 	}
 
 	delete _svg;
@@ -176,7 +179,7 @@ void TouchControls::setDrawer(TouchControlsDrawer *drawer, int width, int height
 	_screen_width = width * SCALE_FACTOR_FXP;
 	_screen_height = height * SCALE_FACTOR_FXP;
 
-	if (drawer) {
+	if (drawer && _svg) {
 		drawer->touchControlInitSurface(*_svg);
 	}
 }
@@ -213,6 +216,9 @@ TouchControls::Function *TouchControls::getZombieFunctionFromPos(int x, int y) {
 
 void TouchControls::draw() {
 	assert(_drawer != nullptr);
+	if (!_svg) {
+		return;
+	}
 
 	uint32 now = g_system->getMillis(true);
 

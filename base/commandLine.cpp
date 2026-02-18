@@ -24,6 +24,13 @@
 
 #define FORBIDDEN_SYMBOL_EXCEPTION_exit
 
+#if defined(__ANDROID__)
+extern "C" int __android_log_write(int prio, const char *tag, const char *text);
+#ifndef ANDROID_LOG_ERROR
+#define ANDROID_LOG_ERROR 6
+#endif
+#endif
+
 #include "engines/advancedDetector.h"
 #include "engines/metaengine.h"
 #include "base/commandLine.h"
@@ -281,6 +288,12 @@ static void usage(const char *s, ...) {
 	va_end(va);
 
 	printf(USAGE_STRING, s_appName, buf, s_appName, s_appName);
+#endif
+	#if defined(__ANDROID__)
+	#ifndef DISABLE_HELP_STRINGS
+	__android_log_write(ANDROID_LOG_ERROR, "OpenFrotzFatal", buf);
+#endif
+	__android_log_write(ANDROID_LOG_ERROR, "OpenFrotzFatal", "commandLine usage() triggered exit(1)");
 #endif
 	exit(1);
 }
@@ -2021,6 +2034,7 @@ Common::String parseCommandLine(Common::StringMap &settings, int argc, const cha
 
 bool processSettings(Common::String &command, Common::StringMap &settings, Common::Error &err) {
 	err = Common::kNoError;
+	warning("OpenFrotzStartPath: processSettings begin command=%s game=%s path=%s", command.c_str(), settings.getValOrDefault("game", "").c_str(), settings.getValOrDefault("path", "").c_str());
 
 #ifndef DISABLE_COMMAND_LINE
 
@@ -2163,6 +2177,7 @@ bool processSettings(Common::String &command, Common::StringMap &settings, Commo
 		} else {
 			Common::Path path(Common::Path::fromConfig(settings["path"]));
 			command = detectGames(path, gameOption.engineId, gameOption.gameId, resursive);
+			warning("OpenFrotzStartPath: auto-detect produced command=%s", command.c_str());
 			if (command.empty()) {
 				err = Common::kNoGameDataFoundError;
 				return cmdDoExit;
@@ -2265,10 +2280,16 @@ bool processSettings(Common::String &command, Common::StringMap &settings, Commo
 		if (ConfMan.hasGameDomain(command)) {
 			// Command is a known target
 			ConfMan.setActiveDomain(command);
+			warning("OpenFrotzStartPath: set active domain from explicit command command=%s activeDomain=%s", command.c_str(), ConfMan.getActiveDomainName().c_str());
 		} else if (gd = findGameMatchingName(command), !gd.gameId.empty()) {
 			// Command is a known game ID
 			Common::String domainName = createTemporaryTarget(gd.engineId, gd.gameId);
+			if (settings.contains("path")) {
+				ConfMan.setPath("path", Common::Path::fromConfig(settings["path"]), domainName);
+				warning("OpenFrotzStartPath: bind temporary target path command=%s activeDomain=%s path=%s", command.c_str(), domainName.c_str(), settings["path"].c_str());
+			}
 			ConfMan.setActiveDomain(domainName);
+			warning("OpenFrotzStartPath: set active domain from game id command=%s activeDomain=%s engine=%s game=%s", command.c_str(), domainName.c_str(), gd.engineId.c_str(), gd.gameId.c_str());
 		} else {
 #ifndef DISABLE_COMMAND_LINE
 			usage("Unrecognized game '%s'. Use the --list-targets and --list-games commands for a list of accepted values.", command.c_str());
@@ -2343,6 +2364,8 @@ bool processSettings(Common::String &command, Common::StringMap &settings, Commo
 			useSessionDomain = (x._key == *sessionKey);
 		ConfMan.set(key, value, useSessionDomain ? Common::ConfigManager::kSessionDomain : Common::ConfigManager::kTransientDomain);
 	}
+
+	warning("OpenFrotzStartPath: processSettings done command=%s activeDomain=%s", command.c_str(), ConfMan.getActiveDomainName().c_str());
 
 	// In non-release builds, if themepath and extrapath are not defined yet, add them to the session path so that it works out
 	// of the box when building and running in tree.

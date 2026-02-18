@@ -33,6 +33,9 @@ namespace Glk {
 #define FONTS_FILENAME "fonts.dat"
 
 Screen::~Screen() {
+	if (!_ownsFonts)
+		return;
+
 	for (int idx = 0; idx < FONTS_TOTAL; ++idx)
 		delete _fonts[idx];
 }
@@ -67,16 +70,31 @@ void Screen::fillRect(const Rect &box, uint color) {
 }
 
 void Screen::loadFonts() {
+	_ownsFonts = true;
 	Common::Archive *archive = nullptr;
 
-	if (!Common::File::exists(FONTS_FILENAME) || (archive = Common::makeZipArchive(FONTS_FILENAME)) == nullptr)
-		error("Could not locate %s", FONTS_FILENAME);
+	auto useFallbackFonts = [&]() {
+		const Graphics::Font *fallback = FontMan.getFontByUsage(Graphics::FontManager::kConsoleFont);
+		warning("OpenFrotzGLK: using fallback console fonts");
+		_ownsFonts = false;
+		_fonts.resize(FONTS_TOTAL);
+		for (int idx = 0; idx < FONTS_TOTAL; ++idx)
+			_fonts[idx] = fallback;
+	};
+
+	if (!Common::File::exists(FONTS_FILENAME) || (archive = Common::makeZipArchive(FONTS_FILENAME)) == nullptr) {
+		warning("OpenFrotzGLK: could not locate %s; falling back to console fonts", FONTS_FILENAME);
+		useFallbackFonts();
+		return;
+	}
 
 	// Open the version.txt file within it to validate the version
 	Common::File f;
 	if (!f.open("version.txt", *archive)) {
 		delete archive;
-		error("Could not get version of fonts data. Possibly malformed");
+		warning("OpenFrotzGLK: malformed fonts archive; falling back to console fonts");
+		useFallbackFonts();
+		return;
 	}
 
 	// Validate the version
@@ -92,12 +110,18 @@ void Screen::loadFonts() {
 
 	if (major < 1 || minor < 2) {
 		delete archive;
-		error("Out of date fonts. Expected at least %s, but got version %d.%d", "1.2", major, minor);
+		warning("OpenFrotzGLK: out of date fonts archive version %d.%d; falling back to console fonts", major, minor);
+		useFallbackFonts();
+		return;
 	}
 
 	loadFonts(archive);
 
 	delete archive;
+	if (_fonts.size() < FONTS_TOTAL) {
+		warning("OpenFrotzGLK: incomplete font set (%d); forcing fallback", (int)_fonts.size());
+		useFallbackFonts();
+	}
 }
 
 void Screen::loadFonts(Common::Archive *archive) {
@@ -129,7 +153,14 @@ const Graphics::Font *Screen::loadFont(FACES face, Common::Archive *archive, dou
 	if (!f->open(FILENAMES[face], *archive))
 		error("Could not load %s from fonts file", FILENAMES[face]);
 
+	#if defined(USE_FREETYPE2)
 	return Graphics::loadTTFFont(f, DisposeAfterUse::YES, (int)size, Graphics::kTTFSizeModeCharacter);
+#else
+	delete f;
+	warning("OpenFrotzGLK: FreeType2 disabled; using console font fallback for %s", FILENAMES[face]);
+	_ownsFonts = false;
+	return FontMan.getFontByUsage(Graphics::FontManager::kConsoleFont);
+#endif
 }
 
 FACES Screen::getFontId(const Common::String &name) {

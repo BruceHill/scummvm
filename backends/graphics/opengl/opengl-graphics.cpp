@@ -1442,10 +1442,12 @@ void OpenGLGraphicsManager::displayActivityIconOnOSD(const Graphics::Surface *ic
 }
 
 void OpenGLGraphicsManager::setPalette(const byte *colors, uint start, uint num) {
-	assert(_gameScreen);
-	assert(_gameScreen->hasPalette());
-
+	// Some engines may submit an initial palette before the GL game surface is allocated.
+	// Preserve palette state and defer surface upload until the game screen exists.
 	memcpy(_gamePalette + start * 3, colors, num * 3);
+	if (!_gameScreen || !_gameScreen->hasPalette())
+		return;
+
 	_gameScreen->setPalette(start, num, colors);
 
 	// We might need to update the cursor palette here.
@@ -1453,9 +1455,7 @@ void OpenGLGraphicsManager::setPalette(const byte *colors, uint start, uint num)
 }
 
 void OpenGLGraphicsManager::grabPalette(byte *colors, uint start, uint num) const {
-	assert(_gameScreen);
-	assert(_gameScreen->hasPalette());
-
+	// Return cached palette even when the GL game surface is not initialized yet.
 	memcpy(colors, _gamePalette + start * 3, num * 3);
 }
 

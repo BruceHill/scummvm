@@ -148,24 +148,25 @@ Common::Error GlkMetaEngine::createInstance(OSystem *syst, Engine **engine,
 	Glk::GlkGameDescription *gameDesc = static_cast<Glk::GlkGameDescription *>(
 			const_cast<void *>(metaEngineDescriptor));
 	assert(gameDesc);
+	warning("OpenFrotzGlkMeta: createInstance gameId=%s filename=%s", gameDesc->_gameId.c_str(), gameDesc->_filename.c_str());
 
 	// Create the correct engine
 	*engine = nullptr;
-	if ((create<Glk::Adrift::AdriftMetaEngine, Glk::Adrift::Adrift>(syst, *gameDesc, *engine))) {}
+	if ((create<Glk::Adrift::AdriftMetaEngine, Glk::Adrift::Adrift>(syst, *gameDesc, *engine))) { warning("OpenFrotzGlkMeta: selected=adrift"); }
 	else if ((create<Glk::AdvSys::AdvSysMetaEngine, Glk::AdvSys::AdvSys>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::AGT::AGTMetaEngine, Glk::AGT::AGT>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::Alan2::Alan2MetaEngine, Glk::Alan2::Alan2>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::Alan3::Alan3MetaEngine, Glk::Alan3::Alan3>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::Archetype::ArchetypeMetaEngine, Glk::Archetype::Archetype>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::Comprehend::ComprehendMetaEngine, Glk::Comprehend::Comprehend>(syst, *gameDesc, *engine))) {}
-	else if ((create<Glk::Glulx::GlulxMetaEngine, Glk::Glulx::Glulx>(syst, *gameDesc, *engine))) {}
+	else if ((create<Glk::Glulx::GlulxMetaEngine, Glk::Glulx::Glulx>(syst, *gameDesc, *engine))) { warning("OpenFrotzGlkMeta: selected=glulx"); }
 	else if ((create<Glk::Hugo::HugoMetaEngine, Glk::Hugo::Hugo>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::JACL::JACLMetaEngine, Glk::JACL::JACL>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::Level9::Level9MetaEngine, Glk::Level9::Level9>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::Magnetic::MagneticMetaEngine, Glk::Magnetic::Magnetic>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::Quest::QuestMetaEngine, Glk::Quest::Quest>(syst, *gameDesc, *engine))) {}
 	else if ((create<Glk::Scott::ScottMetaEngine, Glk::Scott::Scott>(syst, *gameDesc, *engine))) {}
-	else if ((create<Glk::ZCode::ZCodeMetaEngine, Glk::ZCode::ZCode>(syst, *gameDesc, *engine))) {}
+	else if ((create<Glk::ZCode::ZCodeMetaEngine, Glk::ZCode::ZCode>(syst, *gameDesc, *engine))) { warning("OpenFrotzGlkMeta: selected=zcode"); }
 #ifndef RELEASE_BUILD
 	else if ((td = Glk::TADS::TADSMetaEngine::findGame(gameDesc->_gameId.c_str()))._description) {
 		if (!isGameAllowed(td._supportLevel))
@@ -183,6 +184,7 @@ Common::Error GlkMetaEngine::createInstance(OSystem *syst, Engine **engine,
 
 	// gameDesc is copied in Glk
 	delete gameDesc;
+	warning("OpenFrotzGlkMeta: createInstance result=%d", *engine ? 1 : 0);
 	return *engine ? Common::kNoError : Common::kUserCanceled;
 }
 

@@ -36,6 +36,7 @@ class NetJNI {
 
 public:
 	static void init(JNIEnv *env);
+	static jclass getStringClass() { return _CLS_String; }
 
 private:
 	static jclass    _CLS_URL;
@@ -47,6 +48,7 @@ private:
 	static jmethodID _MID_url_getDefaultPort;
 
 	static jclass    _CLS_Socket;
+	static jclass    _CLS_String;
 
 	static jmethodID _MID_socket_init;
 	static jmethodID _MID_socket_ready;

@@ -30,6 +30,7 @@
 // FIXME: Avoid using printf
 #define FORBIDDEN_SYMBOL_EXCEPTION_printf
 
+
 #include "engines/engine.h"
 #include "engines/metaengine.h"
 #include "base/commandLine.h"
@@ -97,6 +98,7 @@
 #include "gui/dump-all-dialogs.h"
 
 static bool launcherDialog() {
+	warning("OpenFrotzStartPath: launcherDialog enter activeDomainPtr=%p activeDomain=%s", (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 
 	// Discard any command line options. Those that affect the graphics
 	// mode and the others (like bootparam etc.) should not
@@ -114,7 +116,9 @@ static bool launcherDialog() {
 		dlg.selectLauncher();
 #endif
 		status = (dlg.runModal() != -1);
+		warning("OpenFrotzStartPath: launcherDialog modal result=%d activeDomainPtr=%p activeDomain=%s", status ? 1 : 0, (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 	} while (noQuit && nullptr == ConfMan.getActiveDomain());
+	warning("OpenFrotzStartPath: launcherDialog exit status=%d activeDomainPtr=%p activeDomain=%s", status ? 1 : 0, (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 	return status;
 }
 
@@ -411,6 +415,8 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 	assert(g_system);
 	OSystem &system = *g_system;
 
+	const bool openfrotzEmbeddedMode = true;
+
 	// Register config manager defaults
 	Base::registerDefaults();
 	system.registerDefaultSettings(Common::ConfigManager::kApplicationDomain);
@@ -530,6 +536,12 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 
 		return res.getCode();
 	}
+	if (openfrotzEmbeddedMode) {
+		ConfMan.setBool("enable_unsupported_game_warning", false, Common::ConfigManager::kSessionDomain);
+		ConfMan.setBool("enable_unsupported_addon_warning", false, Common::ConfigManager::kSessionDomain);
+		warning("OpenFrotzStartPath: embedded mode disabled unsupported-game warning dialogs");
+	}
+	warning("OpenFrotzStartPath: post-processSettings command=%s activeDomain=%s", command.c_str(), ConfMan.getActiveDomainName().c_str());
 
 	if (settings.contains("dump-midi")) {
 		// Store this command line setting in ConfMan, since all transient settings are destroyed
@@ -588,22 +600,28 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 		ConfMan.setInt("disable_display", 1, Common::ConfigManager::kTransientDomain);
 	}
 #endif
-	setupGraphics(system);
+	if (!openfrotzEmbeddedMode) {
+		setupGraphics(system);
 
-	if (!configLoadStatus) {
-		GUI::MessageDialog alert(_("Bad config file format. overwrite?"), _("Yes"), _("Cancel"));
-		if (alert.runModal() != GUI::kMessageOK)
-   			return 0;
+		if (!configLoadStatus) {
+			GUI::MessageDialog alert(_("Bad config file format. overwrite?"), _("Yes"), _("Cancel"));
+			if (alert.runModal() != GUI::kMessageOK)
+				return 0;
+		}
 	}
 	// Init the different managers that are used by the engines.
 	// Do it here to prevent fragmentation later
-	system.getAudioCDManager();
-	MusicManager::instance();
+	if (!openfrotzEmbeddedMode) {
+		system.getAudioCDManager();
+		MusicManager::instance();
+	}
 	Common::DebugManager::instance();
 
 	// Init the event manager. As the virtual keyboard is loaded here, it must
 	// take place after the backend is initiated and the screen has been setup
-	system.getEventManager()->init();
+	if (!openfrotzEmbeddedMode) {
+		system.getEventManager()->init();
+	}
 
 #ifdef ENABLE_EVENTRECORDER
 	// Directly after initializing the event manager, we will initialize our
@@ -615,13 +633,15 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 	g_eventRec.RegisterEventSource();
 #endif
 
-	Common::OSDMessageQueue::instance().registerEventSource();
+	if (!openfrotzEmbeddedMode) {
+		Common::OSDMessageQueue::instance().registerEventSource();
 
-	// Now as the event manager is created, setup the keymapper
-	setupKeymapper(system);
+		// Now as the event manager is created, setup the keymapper
+		setupKeymapper(system);
+	}
 
 #ifdef USE_UPDATES
-	if (!ConfMan.hasKey("updates_check") && g_system->getUpdateManager()) {
+	if (!openfrotzEmbeddedMode && !ConfMan.hasKey("updates_check") && g_system->getUpdateManager()) {
 		GUI::UpdatesDialog dlg;
 		dlg.runModal();
 	}
@@ -631,9 +651,18 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 	// This early popup message for Android, informing the users about important
 	// changes to file access, needs to be *after* language for the GUI has been selected.
 	// Hence, we instantiate GUI Manager here, to take care of this.
-	GUI::GuiManager::instance();
-	if (AndroidFilesystemFactory::instance().hasSAF()
-		&& !ConfMan.hasKey("android_saf_dialog_shown")) {
+	if (!openfrotzEmbeddedMode) {
+		GUI::GuiManager::instance();
+	}
+	const bool hasSaf = AndroidFilesystemFactory::instance().hasSAF();
+	const bool safShown = ConfMan.hasKey("android_saf_dialog_shown");
+	warning("OpenFrotzStartPath: SAF gate hasSAF=%d safShown=%d activeDomainPtr=%p activeDomain=%s", hasSaf ? 1 : 0, safShown ? 1 : 0, (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
+	const bool embeddedSafSkip = (ConfMan.getActiveDomain() != nullptr && ConfMan.getActiveDomainName().equalsIgnoreCase("anchor"));
+	if (embeddedSafSkip) {
+		warning("OpenFrotzStartPath: SAF skip for embedded target activeDomain=%s", ConfMan.getActiveDomainName().c_str());
+		ConfMan.setBool("android_saf_dialog_shown", true);
+	}
+	if (hasSaf && !safShown && !embeddedSafSkip) {
 
 		bool cancelled = false;
 
@@ -662,7 +691,9 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 				// I18N: A button caption to dismiss a message and read it later
 				_("Read Later"), Graphics::kTextAlignLeft);
 
-			if (alert.runModal() != GUI::kMessageOK)
+			const int safResult = alert.runModal();
+			warning("OpenFrotzStartPath: SAF dialog result=%d activeDomain=%s", safResult, ConfMan.getActiveDomainName().c_str());
+			if (safResult != GUI::kMessageOK)
 				cancelled = true;
 		} else {
 			GUI::MessageDialog alert(_(
@@ -687,18 +718,26 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 				// I18N: A button caption to dismiss a message and read it later
 				_("Read Later"), Graphics::kTextAlignLeft);
 
-			if (alert.runModal() != GUI::kMessageOK)
+			const int safResult = alert.runModal();
+			warning("OpenFrotzStartPath: SAF dialog result=%d activeDomain=%s", safResult, ConfMan.getActiveDomainName().c_str());
+			if (safResult != GUI::kMessageOK)
 				cancelled = true;
 		}
 
-		if (!cancelled)
+		if (!cancelled) {
 			ConfMan.setBool("android_saf_dialog_shown", true);
+			warning("OpenFrotzStartPath: SAF marked shown activeDomain=%s", ConfMan.getActiveDomainName().c_str());
+		} else {
+			warning("OpenFrotzStartPath: SAF remains not-shown activeDomain=%s", ConfMan.getActiveDomainName().c_str());
+		}
 	}
 #endif
 
 #ifdef USE_CLOUD
-	CloudMan.init();
-	CloudMan.syncSaves();
+	if (!openfrotzEmbeddedMode) {
+		CloudMan.init();
+		CloudMan.syncSaves();
+	}
 #endif
 
 #if 0
@@ -738,13 +777,19 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 	}
 
 	// Unless a game was specified, show the launcher dialog
-	if (nullptr == ConfMan.getActiveDomain())
+	if (nullptr == ConfMan.getActiveDomain()) {
+		warning("OpenFrotzStartPath: no active domain entering launcher");
 		launcherDialog();
+		warning("OpenFrotzStartPath: launcher returned activeDomain=%s", ConfMan.getActiveDomainName().c_str());
+	}
+
+	warning("OpenFrotzStartPath: pre-loop activeDomainPtr=%p activeDomain=%s", (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 
 	// FIXME: We're now looping the launcher. This, of course, doesn't
 	// work as well as it should. In theory everything should be destroyed
 	// cleanly, so this is now enabled to encourage people to fix bits :)
 	while (nullptr != ConfMan.getActiveDomain()) {
+		warning("OpenFrotzStartPath: loop-enter activeDomainPtr=%p activeDomain=%s", (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 		saveLastLaunchedTarget(ConfMan.getActiveDomainName());
 
 		EngineMan.upgradeTargetIfNecessary(ConfMan.getActiveDomainName());
@@ -754,28 +799,38 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 		const Plugin *plugin = nullptr;
 		DetectedGame game;
 		const void *meDescriptor = nullptr;
+				warning("OpenFrotzStartPath: before identifyGame activeDomainPtr=%p activeDomain=%s", (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 		Common::Error result = identifyGame(specialDebug, &plugin, game, &meDescriptor);
+		warning("OpenFrotzStartPath: identifyGame result=%d activeDomain=%s plugin=%s", (int)result.getCode(), ConfMan.getActiveDomainName().c_str(), plugin ? plugin->getName() : "null");
 
 		if (result.getCode() == Common::kNoError) {
 			Common::String engineId = plugin->getName();
+			warning("OpenFrotzStartPath: engineId from plugin=%s activeDomain=%s", engineId.c_str(), ConfMan.getActiveDomainName().c_str());
 #if defined(UNCACHED_PLUGINS) && defined(DYNAMIC_MODULES) && !defined(DETECTION_STATIC)
 			// Unload all MetaEnginesDetection if we're using uncached plugins to save extra memory.
 			PluginManager::instance().unloadDetectionPlugin();
 #endif
 
 			// Then, get the relevant Engine plugin from MetaEngine.
+			warning("OpenFrotzStartPath: forcing engine plugin load before lookup engineId=%s", engineId.c_str());
+			PluginManager::instance().loadAllPluginsOfType(PLUGIN_TYPE_ENGINE);
 			enginePlugin = PluginMan.findEnginePlugin(engineId);
+			warning("OpenFrotzStartPath: findEnginePlugin result engineId=%s enginePlugin=%p", engineId.c_str(), (void *)enginePlugin);
 			if (enginePlugin == nullptr) {
 				result = Common::kEnginePluginNotFound;
+				warning("OpenFrotzStartPath: engine plugin missing result=%d", (int)result.getCode());
 			}
 		}
 
+		warning("OpenFrotzStartPath: result after engine plugin lookup=%d activeDomain=%s", (int)result.getCode(), ConfMan.getActiveDomainName().c_str());
 		if (result.getCode() == Common::kNoError) {
 			// Unload all plugins not needed for this game, to save memory
 			// Right now, we have a MetaEngine plugin, and we want to unload all except Engine.
 
 			// Pass in the pointer to enginePlugin, with the matching type, so our function behaves as-is.
+			warning("OpenFrotzStartPath: before unloadPluginsExcept enginePlugin=%p", (void *)enginePlugin);
 			PluginManager::instance().unloadPluginsExcept(PLUGIN_TYPE_ENGINE, enginePlugin);
+			warning("OpenFrotzStartPath: after unloadPluginsExcept enginePlugin=%p", (void *)enginePlugin);
 
 #ifdef ENABLE_EVENTRECORDER
 			Common::String recordMode = ConfMan.get("record_mode");
@@ -805,7 +860,9 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 				ttsMan->pushState();
 			}
 			// Try to run the game
+						warning("OpenFrotzStartPath: runGame begin activeDomain=%s enginePlugin=%s", ConfMan.getActiveDomainName().c_str(), enginePlugin ? enginePlugin->getName() : "null");
 			result = runGame(enginePlugin, system, game, meDescriptor);
+			warning("OpenFrotzStartPath: runGame end result=%d activeDomain=%s", (int)result.getCode(), ConfMan.getActiveDomainName().c_str());
 			if (ttsMan != nullptr) {
 				ttsMan->popState();
 			}
@@ -889,16 +946,21 @@ extern "C" int scummvm_main(int argc, const char * const argv[]) {
 		// reset the graphics to default
 		setupGraphics(system);
 		if (nullptr == ConfMan.getActiveDomain()) {
+			warning("OpenFrotzStartPath: relaunch launcher from loop tail activeDomainPtr=%p activeDomain=%s", (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 			launcherDialog();
+			warning("OpenFrotzStartPath: loop-tail launcher returned activeDomainPtr=%p activeDomain=%s", (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 		}
 	}
+	warning("OpenFrotzStartPath: loop-exit activeDomainPtr=%p activeDomain=%s", (void *)ConfMan.getActiveDomain(), ConfMan.getActiveDomainName().c_str());
 #ifdef USE_SDL_NET
 	Networking::LocalWebserver::destroy();
 #endif
 #ifdef USE_CLOUD
-	Networking::ConnectionManager::destroy();
-	//I think it's important to destroy it after ConnectionManager
-	Cloud::CloudManager::destroy();
+	if (!openfrotzEmbeddedMode) {
+		Networking::ConnectionManager::destroy();
+		//I think it's important to destroy it after ConnectionManager
+		Cloud::CloudManager::destroy();
+	}
 #endif
 	PluginManager::destroy();
 	GUI::GuiManager::destroy();
