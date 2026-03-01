@@ -219,73 +219,27 @@ extern "C" __attribute__((visibility("default"))) const char *openfrotz_runtime_
   }
   const std::string cmd = trim(command ? command : "");
   if (cmd.empty()) {
-    uint64 rev = 0;
-    const Common::String snapshot = Glk::OpenFrotzRuntimeHooks::getTranscriptSnapshot(&rev);
-    {
-      StateLock lock;
-      g_lastRevision = rev;
-    }
-    return dupCString(snapshot.c_str());
+    return dupCString("ERROR:Command required.");
   }
 
-  uint64 beforeRevision = 0;
-  uint64 beforeDequeueRevision = Glk::OpenFrotzRuntimeHooks::getDequeueRevision();
-  Glk::OpenFrotzRuntimeHooks::getTranscriptSnapshot(&beforeRevision);
   Glk::OpenFrotzRuntimeHooks::enqueueCommand(Common::String(cmd.c_str()));
-  uint64 waitFromRevision = 0;
-  Glk::OpenFrotzRuntimeHooks::getTranscriptSnapshot(&waitFromRevision);
-  uint64 rev = waitFromRevision;
-  __android_log_print(
-      ANDROID_LOG_INFO,
-      kTag,
-      "send_command cmd=%s before=%llu afterEnqueue=%llu",
-      cmd.c_str(),
-      static_cast<unsigned long long>(beforeRevision),
-      static_cast<unsigned long long>(waitFromRevision));
-  // Avoid injecting synthetic RETURN unless we're actually stalled; eager nudges
-  // can produce a blank command ("I beg your pardon?") before real command output.
-  bool dequeued =
-      Glk::OpenFrotzRuntimeHooks::waitForDequeueSince(beforeDequeueRevision, 150, nullptr);
-  if (!dequeued) {
-    Glk::OpenFrotzRuntimeHooks::nudgeInputPump();
-    dequeued =
-        Glk::OpenFrotzRuntimeHooks::waitForDequeueSince(beforeDequeueRevision, 1050, nullptr);
+  __android_log_print(ANDROID_LOG_INFO, kTag, "send_command accepted cmd=%s", cmd.c_str());
+  return dupCString("OK");
+}
+
+extern "C" __attribute__((visibility("default"))) const char *openfrotz_runtime_read_output() {
+  {
+    StateLock lock;
+    if (g_story.empty()) {
+      return dupCString("ERROR:No active story.");
+    }
   }
-  const uint64 outputBaselineRevision = Glk::OpenFrotzRuntimeHooks::getOutputRevision();
-  if (!dequeued) {
-    __android_log_print(
-        ANDROID_LOG_WARN,
-        kTag,
-        "send_command cmd=%s dequeue wait timed out before output wait",
-        cmd.c_str());
-  }
-  Common::String transcript =
-      Glk::OpenFrotzRuntimeHooks::waitForOutputSince(outputBaselineRevision, 1200, nullptr);
-  if (transcript.empty()) {
-    transcript = Glk::OpenFrotzRuntimeHooks::waitForTranscriptSince(waitFromRevision, 400, &rev);
-  } else {
-    Glk::OpenFrotzRuntimeHooks::getTranscriptSnapshot(&rev);
-  }
+  uint64 rev = 0;
+  const Common::String snapshot = Glk::OpenFrotzRuntimeHooks::getTranscriptSnapshot(&rev);
   {
     StateLock lock;
     g_lastRevision = rev;
   }
-  if (!transcript.empty()) {
-    return dupCString(transcript.c_str());
-  }
-  uint64 snapshotRevision = 0;
-  const Common::String snapshot = Glk::OpenFrotzRuntimeHooks::getTranscriptSnapshot(&snapshotRevision);
-  {
-    StateLock lock;
-    g_lastRevision = snapshotRevision;
-  }
-  __android_log_print(
-      ANDROID_LOG_WARN,
-      kTag,
-      "send_command timeout cmd=%s returning snapshot rev=%llu bytes=%zu",
-      cmd.c_str(),
-      static_cast<unsigned long long>(snapshotRevision),
-      static_cast<size_t>(snapshot.size()));
   return dupCString(snapshot.c_str());
 }
 
