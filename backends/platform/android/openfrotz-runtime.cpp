@@ -223,7 +223,13 @@ extern "C" __attribute__((visibility("default"))) const char *openfrotz_runtime_
   }
 
   Glk::OpenFrotzRuntimeHooks::enqueueCommand(Common::String(cmd.c_str()));
-  __android_log_print(ANDROID_LOG_INFO, kTag, "send_command accepted cmd=%s", cmd.c_str());
+  const bool nudged = Glk::OpenFrotzRuntimeHooks::nudgeInputPump();
+  __android_log_print(
+      ANDROID_LOG_INFO,
+      kTag,
+      "send_command accepted cmd=%s nudged=%d",
+      cmd.c_str(),
+      nudged ? 1 : 0);
   return dupCString("OK");
 }
 
